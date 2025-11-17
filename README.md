@@ -29,15 +29,41 @@ Include the loader script at the very top of your HTML `<head>` tag for earliest
 
 Service workers require HTTPS (or localhost). To test:
 
+### HTTP (localhost only)
 ```bash
-# Using Python 3
-python3 -m http.server 8000
+npm run dev
+```
+Then visit: http://localhost:8000 or http://127.0.0.1:8000
 
-# Using Node.js (install http-server globally first)
-npx http-server -p 8000
+### HTTPS (for custom domains)
+
+If you need to test with a custom domain (e.g., `1ottoland.com`), you need HTTPS:
+
+1. **Add domain to hosts file** (`/etc/hosts`):
+```
+127.0.0.1       1ottoland.com
 ```
 
-Then visit: http://localhost:8000
+2. **Create SSL certificate** (already included in repo, or regenerate):
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout localhost-key.pem -out localhost-cert.pem -days 365 -subj '/CN=1ottoland.com' -addext 'subjectAltName=DNS:1ottoland.com'
+```
+
+3. **Add certificate to macOS trusted certificates**:
+```bash
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain localhost-cert.pem
+```
+
+4. **Restart your browser completely** (close all windows)
+
+5. **Start HTTPS server**:
+```bash
+npm run dev:https
+```
+
+6. Visit: https://1ottoland.com:8000
+
+**Note**: If you still see certificate errors, enable `chrome://flags/#allow-insecure-localhost` in Chrome/Edge.
 
 ## Deployment
 

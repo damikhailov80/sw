@@ -78,9 +78,11 @@ self.addEventListener('fetch', function(event) {
     const url = new URL(event.request.url);
     
     // Проверяем, является ли это запросом к нашему домену (не к внешним ресурсам)
-    const isOurDomain = url.hostname === SW_CONFIG.source.hostname || 
+    const sourceHostnames = Array.isArray(SW_CONFIG.source.hostname) 
+        ? SW_CONFIG.source.hostname 
+        : [SW_CONFIG.source.hostname];
+    const isOurDomain = sourceHostnames.includes(url.hostname) || 
                         url.hostname === 'localhost' ||
-                        url.hostname.includes('.') || // любой домен с точкой
                         url.port === SW_CONFIG.source.port;
     
     // Если это запрос к нашему домену
