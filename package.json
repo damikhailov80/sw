@@ -1,0 +1,11 @@
+{
+  "name": "sw-service",
+  "version": "1.0.0",
+  "description": "Service worker registration service",
+  "scripts": {
+    "dev": "npx http-server -p 8000 -c-1 --cors"
+  },
+  "keywords": ["service-worker", "sw"],
+  "author": "",
+  "license": "MIT"
+}
