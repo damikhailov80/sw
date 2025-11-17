@@ -6,18 +6,18 @@
 // Импортируем конфигурацию
 importScripts('sw-config.js');
 
-const CACHE_NAME = 'sw-cache-v1';
-const urlsToCache = [
-    '/',
+const CACHE_NAME = 'sw-cache-v2';
+const STATIC_CACHE = 'static-v2';
+
+// Собственные ресурсы для кеширования
+const STATIC_RESOURCES = [
     '/index.html',
-    '/service-worker.js',
     '/sw-loader.js',
+    '/service-worker.js',
     '/sw-config.js'
 ];
 
-// Флаг для переключения режима перенаправления
-// По умолчанию ВЫКЛЮЧЕН - включается после загрузки страницы
-let redirectMode = false;
+// Флаг для переключения режима пе
 
 // Слушаем сообщения от страницы
 self.addEventListener('message', function(event) {
@@ -32,35 +32,42 @@ self.addEventListener('message', function(event) {
 
 // Install event - cache resources
 self.addEventListener('install', function(event) {
-    console.log('Service Worker installing');
+    console.log('[SW] Service Worker installing');
     
     event.waitUntil(
-        caches.open(CACHE_NAME)
+        caches.open(STATIC_CACHE)
             .then(function(cache) {
-                console.log('Cache opened');
-                return cache.addAll(urlsToCache);
+                console.log('[SW] Caching static resources:', STATIC_RESOURCES);
+                return cache.addAll(STATIC_RESOURCES);
             })
             .then(function() {
+                console.log('[SW] Static resources cached successfully');
                 return self.skipWaiting();
+            })
+            .catch(function(error) {
+                console.error('[SW] Failed to cache static resources:', error);
             })
     );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', function(event) {
-    console.log('Service Worker activating');
+    console.log('[SW] Service Worker activating');
+    
+    const currentCaches = [CACHE_NAME, STATIC_CACHE];
     
     event.waitUntil(
         caches.keys().then(function(cacheNames) {
             return Promise.all(
                 cacheNames.map(function(cacheName) {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('Deleting old cache:', cacheName);
+                    if (!currentCaches.includes(cacheName)) {
+                        console.log('[SW] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
         }).then(function() {
+            console.log('[SW] Service Worker activated');
             return self.clients.claim();
         })
     );
@@ -70,17 +77,47 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
     const url = new URL(event.request.url);
     
-    // Если это запрос к исходному серверу
-    if (url.hostname === SW_CONFIG.source.hostname && url.port === SW_CONFIG.source.port) {
-        // Пропускаем собственные файлы - они должны загружаться с 127.0.0.1:8000
+    // Проверяем, является ли это запросом к нашему домену (не к внешним ресурсам)
+    const isOurDomain = url.hostname === SW_CONFIG.source.hostname || 
+                        url.hostname === 'localhost' ||
+                        url.hostname.includes('.') || // любой домен с точкой
+                        url.port === SW_CONFIG.source.port;
+    
+    // Если это запрос к нашему домену
+    if (isOurDomain) {
+        // Проверяем, является ли это собственным файлом
         const isOwnFile = url.pathname === '/index.html' || 
                          url.pathname === '/sw-loader.js' || 
                          url.pathname === '/service-worker.js' ||
-                         url.pathname === '/sw-config.js';
+                         url.pathname === '/sw-config.js' ||
+                         url.pathname === '/';
         
         if (isOwnFile) {
-            console.log('[SW] Allowing own file:', event.request.url);
-            event.respondWith(fetch(event.request));
+            console.log('[SW] Own file request:', event.request.url);
+            // Используем стратегию Cache First для собственных файлов
+            event.respondWith(
+                caches.match(event.request).then(function(response) {
+                    if (response) {
+                        console.log('[SW] Serving from cache:', event.request.url);
+                        return response;
+                    }
+                    console.log('[SW] Fetching and caching:', event.request.url);
+                    return fetch(event.request).then(function(response) {
+                        // Кешируем успешный ответ
+                        if (response && response.status === 200) {
+                            const responseToCache = response.clone();
+                            caches.open(STATIC_CACHE).then(function(cache) {
+                                cache.put(event.request, responseToCache);
+                            });
+                        }
+                        return response;
+                    }).catch(function(error) {
+                        console.error('[SW] Fetch failed for own file:', event.request.url, error);
+                        // Пытаемся вернуть из кеша даже если fetch не удался
+                        return caches.match(event.request);
+                    });
+                })
+            );
             return;
         }
         
@@ -88,14 +125,27 @@ self.addEventListener('fetch', function(event) {
         const isNavigationRequest = event.request.mode === 'navigate';
         
         if (isNavigationRequest) {
-            // Для navigation запросов всегда возвращаем index.html
+            // Для navigation запросов всегда возвращаем index.html из кеша или сети
             console.log('[SW] Navigation request, returning index.html for:', event.request.url);
             event.respondWith(
-                fetch('/index.html').then(function(response) {
-                    return new Response(response.body, {
-                        status: 200,
-                        statusText: 'OK',
-                        headers: response.headers
+                caches.match('/index.html').then(function(cachedResponse) {
+                    if (cachedResponse) {
+                        console.log('[SW] Serving index.html from cache for navigation');
+                        return cachedResponse;
+                    }
+                    return fetch('/index.html').then(function(response) {
+                        // Кешируем index.html
+                        if (response && response.status === 200) {
+                            const responseToCache = response.clone();
+                            caches.open(STATIC_CACHE).then(function(cache) {
+                                cache.put('/index.html', responseToCache);
+                            });
+                        }
+                        return response;
+                    }).catch(function(error) {
+                        console.error('[SW] Failed to fetch index.html for navigation:', error);
+                        // Последняя попытка - вернуть из кеша
+                        return caches.match('/index.html');
                     });
                 })
             );
