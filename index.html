@@ -68,16 +68,24 @@
                         console.log('Redirect mode enabled in service worker');
                     }
                     
+                    // Заменяем все абсолютные URL с localhost:3000 на относительные
+                    // чтобы они проходили через service worker
+                    let modifiedHtml = html
+                        .replace(/http:\/\/localhost:3000\//g, '/')
+                        .replace(/https:\/\/localhost:3000\//g, '/')
+                        .replace(/\/\/localhost:3000\//g, '/');
+                    
+                    console.log('Replaced localhost:3000 URLs with relative paths');
+                    
                     // Добавляем стиль для скрытия body до загрузки стилей
                     const styleTag = '<style>body{visibility:hidden}</style>';
                     const scriptTag = '<script>window.addEventListener("load",function(){document.body.style.visibility="visible"})<\/script>';
                     
                     // Вставляем стиль и скрипт в начало head
-                    let modifiedHtml = html;
-                    if (html.includes('<head>')) {
-                        modifiedHtml = html.replace('<head>', '<head>' + styleTag + scriptTag);
-                    } else if (html.includes('<html>')) {
-                        modifiedHtml = html.replace('<html>', '<html><head>' + styleTag + scriptTag + '</head>');
+                    if (modifiedHtml.includes('<head>')) {
+                        modifiedHtml = modifiedHtml.replace('<head>', '<head>' + styleTag + scriptTag);
+                    } else if (modifiedHtml.includes('<html>')) {
+                        modifiedHtml = modifiedHtml.replace('<html>', '<html><head>' + styleTag + scriptTag + '</head>');
                     }
                     
                     // Используем document.write для выполнения скриптов
