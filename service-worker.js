@@ -17,7 +17,8 @@ const STATIC_RESOURCES = [
     '/sw-config.js'
 ];
 
-// Флаг для переключения режима пе
+// Флаг для переключения режима проксирования (по умолчанию включен)
+let redirectMode = true;
 
 // Слушаем сообщения от страницы
 self.addEventListener('message', function(event) {
@@ -82,7 +83,6 @@ self.addEventListener('fetch', function(event) {
         ? SW_CONFIG.source.hostname 
         : [SW_CONFIG.source.hostname];
     const isOurDomain = sourceHostnames.includes(url.hostname) || 
-                        url.hostname === 'localhost' ||
                         url.port === SW_CONFIG.source.port;
     
     // Если это запрос к нашему домену
@@ -154,39 +154,40 @@ self.addEventListener('fetch', function(event) {
             return;
         }
         
-        // Все остальные запросы (fetch, XHR, ресурсы) проксируем на целевой сервер если режим включен
-        if (redirectMode) {
-            const newUrl = new URL(event.request.url);
-            newUrl.hostname = SW_CONFIG.target.hostname;
-            newUrl.port = SW_CONFIG.target.port;
-            
-            // Если путь начинается с /static/ но не с /_next/, добавляем /_next
-            // Это нужно для чанков Turbopack, которые загружаются с относительными путями
-            if (newUrl.pathname.startsWith('/static/') && !newUrl.pathname.startsWith('/_next/')) {
-                newUrl.pathname = '/_next' + newUrl.pathname;
-            }
-            
-            console.log('[SW] Proxying:', event.request.url, '->', newUrl.href);
-            
-            event.respondWith(
-                fetch(newUrl.href, {
-                    method: event.request.method,
-                    headers: event.request.headers,
-                    mode: 'cors',
-                    credentials: 'omit'
-                }).then(function(response) {
-                    console.log('[SW] Success:', newUrl.href, 'Status:', response.status);
-                    return response;
-                }).catch(function(error) {
-                    console.error('[SW] Fetch error for', newUrl.href, error);
-                    return new Response('Error loading resource from ' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port, {
-                        status: 503,
-                        statusText: 'Service Unavailable'
-                    });
-                })
-            );
-            return;
+        // Все остальные запросы (fetch, XHR, ресурсы) проксируем на целевой сервер
+        console.log('[SW] Resource request, redirect mode:', redirectMode, 'URL:', event.request.url);
+        
+        const newUrl = new URL(event.request.url);
+        newUrl.protocol = 'http:';
+        newUrl.hostname = SW_CONFIG.target.hostname;
+        newUrl.port = SW_CONFIG.target.port;
+        
+        // Если путь начинается с /static/ но не с /_next/, добавляем /_next
+        // Это нужно для чанков Turbopack, которые загружаются с относительными путями
+        if (newUrl.pathname.startsWith('/static/') && !newUrl.pathname.startsWith('/_next/')) {
+            newUrl.pathname = '/_next' + newUrl.pathname;
         }
+        
+        console.log('[SW] Proxying resource:', event.request.url, '->', newUrl.href);
+        
+        event.respondWith(
+            fetch(newUrl.href, {
+                method: event.request.method,
+                headers: event.request.headers,
+                mode: 'cors',
+                credentials: 'omit'
+            }).then(function(response) {
+                console.log('[SW] Resource success:', newUrl.href, 'Status:', response.status);
+                return response;
+            }).catch(function(error) {
+                console.error('[SW] Resource fetch error for', newUrl.href, error);
+                return new Response('Error loading resource from ' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port, {
+                    status: 503,
+                    statusText: 'Service Unavailable'
+                });
+            })
+        );
+        return;
     }
     
     // Все остальные запросы - обычная обработка
