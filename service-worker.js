@@ -6,8 +6,8 @@
 // Импортируем конфигурацию
 importScripts('sw-config.js');
 
-const CACHE_NAME = 'sw-cache-v2';
-const STATIC_CACHE = 'static-v2';
+const CACHE_NAME = 'sw-cache-v3';
+const STATIC_CACHE = 'static-v3';
 
 // Собственные ресурсы для кеширования
 const STATIC_RESOURCES = [
@@ -78,6 +78,8 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('fetch', function(event) {
     const url = new URL(event.request.url);
     
+    console.log('[SW] Fetch event:', url.href, 'hostname:', url.hostname, 'port:', url.port, 'pathname:', url.pathname);
+    
     // Проверяем, является ли это запросом к нашему домену (не к внешним ресурсам)
     const sourceHostnames = Array.isArray(SW_CONFIG.source.hostname) 
         ? SW_CONFIG.source.hostname 
@@ -85,16 +87,56 @@ self.addEventListener('fetch', function(event) {
     const isOurDomain = sourceHostnames.includes(url.hostname) || 
                         url.port === SW_CONFIG.source.port;
     
+    console.log('[SW] isOurDomain:', isOurDomain, 'sourceHostnames:', sourceHostnames);
+    
     // Если это запрос к нашему домену
     if (isOurDomain) {
-        // Проверяем, является ли это собственным файлом
+        // Проверяем, является ли это собственным файлом или hook запросом
+        const isHookRequest = url.pathname.startsWith('/hook');
         const isOwnFile = url.pathname === '/index.html' || 
                          url.pathname === '/sw-loader.js' || 
                          url.pathname === '/service-worker.js' ||
                          url.pathname === '/sw-config.js' ||
-                         url.pathname === '/';
+                         url.pathname === '/' ||
+                         isHookRequest;
         
         if (isOwnFile) {
+            // Особая обработка для /hook - проксируем на целевой сервер
+            if (isHookRequest) {
+                console.log('[SW] Hook request detected:', event.request.url);
+                
+                // Извлекаем реальный путь (убираем /hook)
+                const realPath = url.pathname.substring(5) || '/'; // substring(5) убирает '/hook'
+                
+                const newUrl = new URL(event.request.url);
+                newUrl.protocol = 'http:';
+                newUrl.hostname = SW_CONFIG.target.hostname;
+                newUrl.port = SW_CONFIG.target.port;
+                newUrl.pathname = realPath;
+                
+                console.log('[SW] Proxying hook request:', event.request.url, '->', newUrl.href);
+                
+                event.respondWith(
+                    fetch(newUrl.href, {
+                        method: event.request.method,
+                        headers: event.request.headers,
+                        mode: 'cors',
+                        credentials: 'omit'
+                    }).then(function(response) {
+                        console.log('[SW] Hook request success:', newUrl.href, 'Status:', response.status);
+                        return response;
+                    }).catch(function(error) {
+                        console.error('[SW] Hook request error for', newUrl.href, error);
+                        return new Response('Error loading from target server: ' + error.message, {
+                            status: 503,
+                            statusText: 'Service Unavailable'
+                        });
+                    })
+                );
+                return;
+            }
+            
+            // Обычная обработка для остальных собственных файлов
             console.log('[SW] Own file request:', event.request.url);
             // Используем стратегию Cache First для собственных файлов
             event.respondWith(

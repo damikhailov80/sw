@@ -18,6 +18,18 @@
         .then(function(registration) {
             console.log('Service Worker registered successfully:', registration.scope);
             
+            // Если service worker активен, но не контролирует страницу - перезагружаем
+            if (registration.active && !navigator.serviceWorker.controller) {
+                console.log('Service Worker active but not controlling, reloading page...');
+                window.location.reload();
+                return;
+            }
+            
+            // Принудительно проверяем обновления
+            registration.update().then(function() {
+                console.log('Service Worker update check completed');
+            });
+            
             // Включаем режим проксирования после полной загрузки страницы
             window.addEventListener('load', function() {
                 if (navigator.serviceWorker.controller) {
@@ -31,11 +43,14 @@
             // Check for updates
             registration.addEventListener('updatefound', function() {
                 const newWorker = registration.installing;
-                console.log('Service Worker update found');
+                console.log('Service Worker update found, new worker installing...');
                 
                 newWorker.addEventListener('statechange', function() {
+                    console.log('Service Worker state changed to:', newWorker.state);
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        console.log('New Service Worker available');
+                        console.log('New Service Worker installed! Reload page to activate.');
+                        // Автоматически перезагружаем страницу для активации нового SW
+                        window.location.reload();
                     }
                 });
             });

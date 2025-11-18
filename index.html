@@ -41,12 +41,12 @@
     <script>
         // Функция загрузки контента
         function loadContent() {
-            // Используем текущий путь для запроса к целевому серверу
+            // Используем специальный URL /hook который будет перехвачен service worker
             const currentPath = window.location.pathname;
-            const targetUrl = 'http://' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port + currentPath;
-            console.log('Starting fetch to ' + targetUrl + ' (from path: ' + currentPath + ')');
+            const hookUrl = '/hook' + currentPath;
+            console.log('Starting fetch to ' + hookUrl + ' (will be proxied to target server)');
             
-            fetch(targetUrl, {
+            fetch(hookUrl, {
                 mode: 'cors',
                 credentials: 'omit'
             })
@@ -123,12 +123,16 @@
         
         // Ждем пока service worker будет готов, затем загружаем контент
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(function() {
-                console.log('Service Worker is ready');
+            console.log('Waiting for Service Worker to be ready...');
+            navigator.serviceWorker.ready.then(function(registration) {
+                console.log('Service Worker is ready, controller:', navigator.serviceWorker.controller);
+                console.log('Service Worker scope:', registration.scope);
+                console.log('Service Worker active:', registration.active);
                 loadContent();
             });
         } else {
             // Если service worker не поддерживается, загружаем сразу
+            console.warn('Service Worker not supported, loading content directly');
             loadContent();
         }
     </script>
