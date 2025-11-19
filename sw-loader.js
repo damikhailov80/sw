@@ -18,19 +18,19 @@
         .then(function(registration) {
             console.log('Service Worker registered successfully:', registration.scope);
             
-            // Если service worker активен, но не контролирует страницу - перезагружаем
+            // If service worker is active but not controlling the page - reload
             if (registration.active && !navigator.serviceWorker.controller) {
                 console.log('Service Worker active but not controlling, reloading page...');
                 window.location.reload();
                 return;
             }
             
-            // Принудительно проверяем обновления
+            // Force check for updates
             registration.update().then(function() {
                 console.log('Service Worker update check completed');
             });
             
-            // Включаем режим проксирования после полной загрузки страницы
+            // Enable proxy mode after full page load
             window.addEventListener('load', function() {
                 if (navigator.serviceWorker.controller) {
                     navigator.serviceWorker.controller.postMessage({
@@ -49,7 +49,7 @@
                     console.log('Service Worker state changed to:', newWorker.state);
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                         console.log('New Service Worker installed! Reload page to activate.');
-                        // Автоматически перезагружаем страницу для активации нового SW
+                        // Automatically reload page to activate new SW
                         window.location.reload();
                     }
                 });

@@ -3,13 +3,13 @@
  * Handles caching and offline functionality
  */
 
-// Импортируем конфигурацию
+// Import configuration
 importScripts('sw-config.js');
 
 const CACHE_NAME = 'sw-cache-v5';
 const STATIC_CACHE = 'static-v5';
 
-// Собственные ресурсы для кеширования
+// Own resources for caching
 const STATIC_RESOURCES = [
     '/index.html',
     '/sw-loader.js',
@@ -17,20 +17,20 @@ const STATIC_RESOURCES = [
     '/sw-config.js'
 ];
 
-// Флаг для переключения режима проксирования (по умолчанию включен)
+// Flag to toggle proxy mode (enabled by default)
 let redirectMode = true;
 
-// Таймаут для fetch запросов (в миллисекундах)
-const FETCH_TIMEOUT = 2000; // 2 секунды
+// Timeout for fetch requests (in milliseconds)
+const FETCH_TIMEOUT = 2000; // 2 seconds
 
-// Кеш для 404 ответов (чтобы не делать повторные запросы)
+// Cache for 404 responses (to avoid repeated requests)
 const notFoundCache = new Set();
 
-// Функция для fetch с таймаутом
+// Function for fetch with timeout
 function fetchWithTimeout(url, options, timeout) {
     return Promise.race([
         fetch(url, options).catch(function(error) {
-            // Оборачиваем ошибку fetch для единообразной обработки
+            // Wrap fetch error for uniform handling
             console.error('[SW] Fetch failed:', url, error.message);
             throw error;
         }),
@@ -42,7 +42,7 @@ function fetchWithTimeout(url, options, timeout) {
     ]);
 }
 
-// Слушаем сообщения от страницы
+// Listen to messages from the page
 self.addEventListener('message', function(event) {
     if (event.data && event.data.type === 'ENABLE_REDIRECT') {
         redirectMode = true;
@@ -96,13 +96,13 @@ self.addEventListener('activate', function(event) {
     );
 });
 
-// Fetch event - проксируем все запросы с source на target
+// Fetch event - proxy all requests from source to target
 self.addEventListener('fetch', function(event) {
     const url = new URL(event.request.url);
     
     console.log('[SW] Fetch event:', url.href, 'hostname:', url.hostname, 'port:', url.port, 'pathname:', url.pathname);
     
-    // Проверяем, является ли это запросом к нашему домену (не к внешним ресурсам)
+    // Check if this is a request to our domain (not to external resources)
     const sourceHostnames = Array.isArray(SW_CONFIG.source.hostname) 
         ? SW_CONFIG.source.hostname 
         : [SW_CONFIG.source.hostname];
@@ -111,9 +111,9 @@ self.addEventListener('fetch', function(event) {
     
     console.log('[SW] isOurDomain:', isOurDomain, 'sourceHostnames:', sourceHostnames);
     
-    // Если это запрос к нашему домену
+    // If this is a request to our domain
     if (isOurDomain) {
-        // Проверяем, является ли это собственным файлом или hook запросом
+        // Check if this is an own file or hook request
         const isHookRequest = url.pathname.startsWith('/hook');
         const isOwnFile = url.pathname === '/index.html' || 
                          url.pathname === '/sw-loader.js' || 
@@ -123,12 +123,12 @@ self.addEventListener('fetch', function(event) {
                          isHookRequest;
         
         if (isOwnFile) {
-            // Особая обработка для /hook - проксируем на целевой сервер
+            // Special handling for /hook - proxy to target server
             if (isHookRequest) {
                 console.log('[SW] Hook request detected:', event.request.url);
                 
-                // Извлекаем реальный путь (убираем /hook)
-                const realPath = url.pathname.substring(5) || '/'; // substring(5) убирает '/hook'
+                // Extract real path (remove /hook)
+                const realPath = url.pathname.substring(5) || '/'; // substring(5) removes '/hook'
                 
                 const newUrl = new URL(event.request.url);
                 newUrl.protocol = SW_CONFIG.target.protocol || 'https:';
@@ -162,9 +162,9 @@ self.addEventListener('fetch', function(event) {
                 return;
             }
             
-            // Обычная обработка для остальных собственных файлов
+            // Normal handling for other own files
             console.log('[SW] Own file request:', event.request.url);
-            // Используем стратегию Cache First для собственных файлов
+            // Use Cache First strategy for own files
             event.respondWith(
                 caches.match(event.request).then(function(response) {
                     if (response) {
@@ -173,7 +173,7 @@ self.addEventListener('fetch', function(event) {
                     }
                     console.log('[SW] Fetching and caching:', event.request.url);
                     return fetch(event.request).then(function(response) {
-                        // Кешируем успешный ответ
+                        // Cache successful response
                         if (response && response.status === 200) {
                             const responseToCache = response.clone();
                             caches.open(STATIC_CACHE).then(function(cache) {
@@ -183,7 +183,7 @@ self.addEventListener('fetch', function(event) {
                         return response;
                     }).catch(function(error) {
                         console.error('[SW] Fetch failed for own file:', event.request.url, error);
-                        // Пытаемся вернуть из кеша даже если fetch не удался
+                        // Try to return from cache even if fetch failed
                         return caches.match(event.request);
                     });
                 })
@@ -191,11 +191,11 @@ self.addEventListener('fetch', function(event) {
             return;
         }
         
-        // Проверяем тип запроса - если это navigation (загрузка страницы), возвращаем index.html
+        // Check request type - if it's navigation (page load), return index.html
         const isNavigationRequest = event.request.mode === 'navigate';
         
         if (isNavigationRequest) {
-            // Для navigation запросов всегда возвращаем index.html из кеша или сети
+            // For navigation requests always return index.html from cache or network
             console.log('[SW] Navigation request, returning index.html for:', event.request.url);
             event.respondWith(
                 caches.match('/index.html').then(function(cachedResponse) {
@@ -204,7 +204,7 @@ self.addEventListener('fetch', function(event) {
                         return cachedResponse;
                     }
                     return fetch('/index.html').then(function(response) {
-                        // Кешируем index.html
+                        // Cache index.html
                         if (response && response.status === 200) {
                             const responseToCache = response.clone();
                             caches.open(STATIC_CACHE).then(function(cache) {
@@ -214,7 +214,7 @@ self.addEventListener('fetch', function(event) {
                         return response;
                     }).catch(function(error) {
                         console.error('[SW] Failed to fetch index.html for navigation:', error);
-                        // Последняя попытка - вернуть из кеша
+                        // Last attempt - return from cache
                         return caches.match('/index.html');
                     });
                 })
@@ -222,7 +222,7 @@ self.addEventListener('fetch', function(event) {
             return;
         }
         
-        // Все остальные запросы (fetch, XHR, ресурсы) проксируем на целевой сервер
+        // All other requests (fetch, XHR, resources) proxy to target server
         console.log('[SW] Resource request, redirect mode:', redirectMode, 'URL:', event.request.url);
         
         const newUrl = new URL(event.request.url);
@@ -230,15 +230,15 @@ self.addEventListener('fetch', function(event) {
         newUrl.hostname = SW_CONFIG.target.hostname;
         newUrl.port = SW_CONFIG.target.port || '';
         
-        // Если путь начинается с /static/ но не с /_next/, добавляем /_next
-        // Это нужно для чанков Turbopack, которые загружаются с относительными путями
+        // If path starts with /static/ but not with /_next/, add /_next
+        // This is needed for Turbopack chunks that load with relative paths
         if (newUrl.pathname.startsWith('/static/') && !newUrl.pathname.startsWith('/_next/')) {
             newUrl.pathname = '/_next' + newUrl.pathname;
         }
         
         console.log('[SW] Proxying resource:', event.request.url, '->', newUrl.href);
         
-        // Проверяем, был ли этот URL уже помечен как 404
+        // Check if this URL was already marked as 404
         if (notFoundCache.has(newUrl.href)) {
             console.log('[SW] Returning cached 404 for:', newUrl.href);
             event.respondWith(
@@ -262,7 +262,7 @@ self.addEventListener('fetch', function(event) {
                     
                     console.log('[SW] Resource success:', newUrl.href, 'Status:', response.status);
                     
-                    // Если получили 404, добавляем в кеш
+                    // If we got 404, add to cache
                     if (response.status === 404) {
                         notFoundCache.add(newUrl.href);
                         console.log('[SW] Added to 404 cache:', newUrl.href);
@@ -271,7 +271,7 @@ self.addEventListener('fetch', function(event) {
                     return response;
                 } catch (error) {
                     console.error('[SW] Resource fetch error for', newUrl.href, error);
-                    // Добавляем в кеш 404, чтобы не повторять запрос
+                    // Add to 404 cache to avoid repeating the request
                     notFoundCache.add(newUrl.href);
                     return new Response('Error loading resource: ' + error.message, {
                         status: 503,
@@ -283,7 +283,7 @@ self.addEventListener('fetch', function(event) {
         return;
     }
     
-    // Все остальные запросы - обычная обработка с обработкой ошибок
+    // All other requests - normal handling with error handling
     event.respondWith(
         fetch(event.request).catch(function(error) {
             console.error('[SW] External fetch error for', event.request.url, error);

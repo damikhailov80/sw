@@ -25,7 +25,7 @@
         }
     </style>
     <script>
-        // Показываем body когда все стили загружены
+        // Show body when all styles are loaded
         window.addEventListener('load', function() {
             document.body.classList.add('ready');
         });
@@ -39,9 +39,9 @@
     <script src="/sw-config.js"></script>
     <script src="/sw-loader.js"></script>
     <script>
-        // Функция загрузки контента
+        // Content loading function
         function loadContent() {
-            // Используем специальный URL /hook который будет перехвачен service worker
+            // Use special /hook URL that will be intercepted by service worker
             const currentPath = window.location.pathname;
             const hookUrl = '/hook' + currentPath;
             console.log('Starting fetch to ' + hookUrl + ' (will be proxied to target server)');
@@ -53,14 +53,14 @@
                 .then(response => {
                     console.log('Fetch response received:', response.status, response.statusText);
                     if (!response.ok) {
-                        throw new Error('Сервер недоступен (статус: ' + response.status + ')');
+                        throw new Error('Server unavailable (status: ' + response.status + ')');
                     }
                     return response.text();
                 })
                 .then(html => {
                     console.log('HTML received, length:', html.length);
                     
-                    // Включаем режим перенаправления в service worker
+                    // Enable redirect mode in service worker
                     if (navigator.serviceWorker.controller) {
                         navigator.serviceWorker.controller.postMessage({
                             type: 'ENABLE_REDIRECT'
@@ -68,8 +68,8 @@
                         console.log('Redirect mode enabled in service worker');
                     }
                     
-                    // Заменяем все абсолютные URL с localhost:3000 на относительные
-                    // чтобы они проходили через service worker
+                    // Replace all absolute URLs with localhost:3000 to relative ones
+                    // so they go through the service worker
                     let modifiedHtml = html
                         .replace(/http:\/\/localhost:3000\//g, '/')
                         .replace(/https:\/\/localhost:3000\//g, '/')
@@ -77,18 +77,18 @@
                     
                     console.log('Replaced localhost:3000 URLs with relative paths');
                     
-                    // Добавляем стиль для скрытия body до загрузки стилей
+                    // Add style to hide body until styles are loaded
                     const styleTag = '<style>body{visibility:hidden}</style>';
                     const scriptTag = '<script>window.addEventListener("load",function(){document.body.style.visibility="visible"})<\/script>';
                     
-                    // Вставляем стиль и скрипт в начало head
+                    // Insert style and script at the beginning of head
                     if (modifiedHtml.includes('<head>')) {
                         modifiedHtml = modifiedHtml.replace('<head>', '<head>' + styleTag + scriptTag);
                     } else if (modifiedHtml.includes('<html>')) {
                         modifiedHtml = modifiedHtml.replace('<html>', '<html><head>' + styleTag + scriptTag + '</head>');
                     }
                     
-                    // Используем document.write для выполнения скриптов
+                    // Use document.write to execute scripts
                     document.open();
                     document.write(modifiedHtml);
                     document.close();
@@ -97,13 +97,13 @@
                 .catch(error => {
                     console.error('Fetch error:', error);
                     document.getElementById('error').style.display = 'block';
-                    document.getElementById('error').textContent = 'Ошибка загрузки: ' + error.message + '. Проверьте, что сервер на ' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port + ' запущен и настроен CORS.';
+                    document.getElementById('error').textContent = 'Loading error: ' + error.message + '. Check that the server at ' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port + ' is running and CORS is configured.';
                 });
         }
         
-        // Перехватываем клики по ссылкам для SPA навигации
+        // Intercept link clicks for SPA navigation
         document.addEventListener('click', function(e) {
-            // Проверяем, является ли цель ссылкой
+            // Check if the target is a link
             let target = e.target;
             while (target && target.tagName !== 'A') {
                 target = target.parentElement;
@@ -111,25 +111,25 @@
             
             if (target && target.tagName === 'A' && target.href) {
                 const url = new URL(target.href);
-                // Если это внутренняя ссылка на наш домен
+                // If this is an internal link to our domain
                 if (url.hostname === window.location.hostname && url.port === window.location.port) {
                     e.preventDefault();
                     console.log('Navigating to:', url.pathname);
-                    // Используем History API для изменения URL без перезагрузки
+                    // Use History API to change URL without reload
                     window.history.pushState({}, '', url.pathname + url.search + url.hash);
-                    // Перезагружаем контент для нового пути
+                    // Reload content for the new path
                     loadContent();
                 }
             }
         }, true);
         
-        // Обрабатываем кнопки назад/вперед браузера
+        // Handle browser back/forward buttons
         window.addEventListener('popstate', function() {
             console.log('Popstate event, loading content for:', window.location.pathname);
             loadContent();
         });
         
-        // Ждем пока service worker будет готов, затем загружаем контент
+        // Wait for service worker to be ready, then load content
         if ('serviceWorker' in navigator) {
             console.log('Waiting for Service Worker to be ready...');
             navigator.serviceWorker.ready.then(function(registration) {
@@ -139,7 +139,7 @@
                 loadContent();
             });
         } else {
-            // Если service worker не поддерживается, загружаем сразу
+            // If service worker is not supported, load immediately
             console.warn('Service Worker not supported, loading content directly');
             loadContent();
         }

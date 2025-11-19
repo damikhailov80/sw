@@ -18,7 +18,7 @@ const server = https.createServer(options, (req, res) => {
       return;
     }
     
-    // Определяем MIME type
+    // Determine MIME type
     const ext = path.extname(fullPath);
     const mimeTypes = {
       '.html': 'text/html',
