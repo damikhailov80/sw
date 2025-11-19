@@ -20,6 +20,28 @@ const STATIC_RESOURCES = [
 // Флаг для переключения режима проксирования (по умолчанию включен)
 let redirectMode = true;
 
+// Таймаут для fetch запросов (в миллисекундах)
+const FETCH_TIMEOUT = 2000; // 2 секунды
+
+// Кеш для 404 ответов (чтобы не делать повторные запросы)
+const notFoundCache = new Set();
+
+// Функция для fetch с таймаутом
+function fetchWithTimeout(url, options, timeout) {
+    return Promise.race([
+        fetch(url, options).catch(function(error) {
+            // Оборачиваем ошибку fetch для единообразной обработки
+            console.error('[SW] Fetch failed:', url, error.message);
+            throw error;
+        }),
+        new Promise(function(_, reject) {
+            setTimeout(function() {
+                reject(new Error('Request timeout'));
+            }, timeout);
+        })
+    ]);
+}
+
 // Слушаем сообщения от страницы
 self.addEventListener('message', function(event) {
     if (event.data && event.data.type === 'ENABLE_REDIRECT') {
@@ -117,21 +139,25 @@ self.addEventListener('fetch', function(event) {
                 console.log('[SW] Proxying hook request:', event.request.url, '->', newUrl.href);
                 
                 event.respondWith(
-                    fetch(newUrl.href, {
-                        method: event.request.method,
-                        headers: event.request.headers,
-                        mode: 'cors',
-                        credentials: 'omit'
-                    }).then(function(response) {
-                        console.log('[SW] Hook request success:', newUrl.href, 'Status:', response.status);
-                        return response;
-                    }).catch(function(error) {
-                        console.error('[SW] Hook request error for', newUrl.href, error);
-                        return new Response('Error loading from target server: ' + error.message, {
-                            status: 503,
-                            statusText: 'Service Unavailable'
-                        });
-                    })
+                    (async function() {
+                        try {
+                            const response = await fetchWithTimeout(newUrl.href, {
+                                method: event.request.method,
+                                headers: event.request.headers,
+                                mode: 'cors',
+                                credentials: 'omit'
+                            }, FETCH_TIMEOUT);
+                            
+                            console.log('[SW] Hook request success:', newUrl.href, 'Status:', response.status);
+                            return response;
+                        } catch (error) {
+                            console.error('[SW] Hook request error for', newUrl.href, error);
+                            return new Response('Error loading from target server: ' + error.message, {
+                                status: 503,
+                                statusText: 'Service Unavailable'
+                            });
+                        }
+                    })()
                 );
                 return;
             }
@@ -212,26 +238,59 @@ self.addEventListener('fetch', function(event) {
         
         console.log('[SW] Proxying resource:', event.request.url, '->', newUrl.href);
         
+        // Проверяем, был ли этот URL уже помечен как 404
+        if (notFoundCache.has(newUrl.href)) {
+            console.log('[SW] Returning cached 404 for:', newUrl.href);
+            event.respondWith(
+                new Response('Not Found (cached)', {
+                    status: 404,
+                    statusText: 'Not Found'
+                })
+            );
+            return;
+        }
+        
         event.respondWith(
-            fetch(newUrl.href, {
-                method: event.request.method,
-                headers: event.request.headers,
-                mode: 'cors',
-                credentials: 'omit'
-            }).then(function(response) {
-                console.log('[SW] Resource success:', newUrl.href, 'Status:', response.status);
-                return response;
-            }).catch(function(error) {
-                console.error('[SW] Resource fetch error for', newUrl.href, error);
-                return new Response('Error loading resource from ' + SW_CONFIG.target.hostname + ':' + SW_CONFIG.target.port, {
-                    status: 503,
-                    statusText: 'Service Unavailable'
-                });
-            })
+            (async function() {
+                try {
+                    const response = await fetchWithTimeout(newUrl.href, {
+                        method: event.request.method,
+                        headers: event.request.headers,
+                        mode: 'cors',
+                        credentials: 'omit'
+                    }, FETCH_TIMEOUT);
+                    
+                    console.log('[SW] Resource success:', newUrl.href, 'Status:', response.status);
+                    
+                    // Если получили 404, добавляем в кеш
+                    if (response.status === 404) {
+                        notFoundCache.add(newUrl.href);
+                        console.log('[SW] Added to 404 cache:', newUrl.href);
+                    }
+                    
+                    return response;
+                } catch (error) {
+                    console.error('[SW] Resource fetch error for', newUrl.href, error);
+                    // Добавляем в кеш 404, чтобы не повторять запрос
+                    notFoundCache.add(newUrl.href);
+                    return new Response('Error loading resource: ' + error.message, {
+                        status: 503,
+                        statusText: 'Service Unavailable'
+                    });
+                }
+            })()
         );
         return;
     }
     
-    // Все остальные запросы - обычная обработка
-    event.respondWith(fetch(event.request));
+    // Все остальные запросы - обычная обработка с обработкой ошибок
+    event.respondWith(
+        fetch(event.request).catch(function(error) {
+            console.error('[SW] External fetch error for', event.request.url, error);
+            return new Response('Network error: ' + error.message, {
+                status: 503,
+                statusText: 'Service Unavailable'
+            });
+        })
+    );
 });

@@ -12,7 +12,7 @@ const SW_CONFIG = {
     
     // Исходный сервер (откуда идут запросы)
     source: {
-        hostname: ['127.0.0.1', '1ottoland.com'],
+        hostname: ['127.0.0.1', '1ottoland.com', 'localhost'],
         port: '8000'
     }
 };
