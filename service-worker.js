@@ -6,8 +6,8 @@
 // Импортируем конфигурацию
 importScripts('sw-config.js');
 
-const CACHE_NAME = 'sw-cache-v4';
-const STATIC_CACHE = 'static-v4';
+const CACHE_NAME = 'sw-cache-v5';
+const STATIC_CACHE = 'static-v5';
 
 // Собственные ресурсы для кеширования
 const STATIC_RESOURCES = [
@@ -131,9 +131,9 @@ self.addEventListener('fetch', function(event) {
                 const realPath = url.pathname.substring(5) || '/'; // substring(5) убирает '/hook'
                 
                 const newUrl = new URL(event.request.url);
-                newUrl.protocol = 'http:';
+                newUrl.protocol = SW_CONFIG.target.protocol || 'https:';
                 newUrl.hostname = SW_CONFIG.target.hostname;
-                newUrl.port = SW_CONFIG.target.port;
+                newUrl.port = SW_CONFIG.target.port || '';
                 newUrl.pathname = realPath;
                 
                 console.log('[SW] Proxying hook request:', event.request.url, '->', newUrl.href);
@@ -226,9 +226,9 @@ self.addEventListener('fetch', function(event) {
         console.log('[SW] Resource request, redirect mode:', redirectMode, 'URL:', event.request.url);
         
         const newUrl = new URL(event.request.url);
-        newUrl.protocol = 'http:';
+        newUrl.protocol = SW_CONFIG.target.protocol || 'https:';
         newUrl.hostname = SW_CONFIG.target.hostname;
-        newUrl.port = SW_CONFIG.target.port;
+        newUrl.port = SW_CONFIG.target.port || '';
         
         // Если путь начинается с /static/ но не с /_next/, добавляем /_next
         // Это нужно для чанков Turbopack, которые загружаются с относительными путями
