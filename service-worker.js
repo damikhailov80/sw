@@ -6,8 +6,8 @@
 // Импортируем конфигурацию
 importScripts('sw-config.js');
 
-const CACHE_NAME = 'sw-cache-v3';
-const STATIC_CACHE = 'static-v3';
+const CACHE_NAME = 'sw-cache-v4';
+const STATIC_CACHE = 'static-v4';
 
 // Собственные ресурсы для кеширования
 const STATIC_RESOURCES = [
